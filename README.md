@@ -1,4 +1,4 @@
-# BusSimulatorFinal
+# MHD-HK
 
 Jednoduchý simulátor linky MHD v Hradci Králové, postavený v Pythonu s využitím knihovny `pygame`. Projekt zobrazuje informační panel autobusu a přehrává hlášení zastávek.
 
