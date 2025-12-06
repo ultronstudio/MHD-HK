@@ -1,5 +1,6 @@
 {
   "id": "2",
+  "vehicle": "trolley",
   "description": "TERMINÁL HD > NOVÝ HRADEC KRÁLOVÉ",
   "stops": [
     { "name": "TERMINÁL HD", "distance": 0, "audio": "terminal_hd" },

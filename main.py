@@ -6,6 +6,7 @@ import datetime
 import pygame
 import tkinter as tk
 from tkinter import messagebox
+import random
 
 # --- KONFIGURACE BAREV A ROZMĚRŮ ---
 W, H = 1280, 720
@@ -29,11 +30,18 @@ STOPS_AUDIO_DIR = os.path.join(AUDIO_DIR, "stops")
 
 DOOR_TIME = 8.0           # doba otevřených dveří (s)
 LAYOVER_TIME = 10.0       # pauza na konečné (s)
-TIME_SCALE = 8.0          # 1 reálná sekunda = 8 s simulovaného času
+TIME_SCALE = 1.0          # 1 reálná sekunda = 1 s simulovaného času (reálný čas)
 
 # jak dlouho před příjezdem se má hlásit
 NEXT_STOP_ANNOUNCE_BEFORE_SEC = 60.0    # "příští zastávka"
 CURRENT_STOP_ANNOUNCE_BEFORE_SEC = 10.0 # aktuální zastávka
+
+# Náhodné poruchy troleje (volitelné)
+ENABLE_RANDOM_BREAKS = False
+TROLLEY_BREAK_PROB_PER_LEG = 0.03
+TROLLEY_REPAIR_MIN_SEC = 20.0
+TROLLEY_REPAIR_MAX_SEC = 60.0
+TROLLEY_BREAK_REASONS = ["porucha_trolej", "strom_na_vedeni", "nehoda_automobil", "porucha_vozu"]
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LINES_DIR = os.path.join(BASE_DIR, "lines")
@@ -105,6 +113,17 @@ class BusSimulatorSimpleLine:
 
         self.prebuild_route()
 
+        # plánovaný čas odjezdu z první zastávky (aktuální čas)
+        try:
+            self.departure_time = datetime.datetime.now()
+        except Exception:
+            self.departure_time = datetime.datetime.today()
+        # spočítat plánované časy příjezdů pro každou zastávku
+        try:
+            self._compute_schedule_times()
+        except Exception:
+            pass
+
         # Stav vozu
         # bus_abs_pos = čas od začátku směru v sekundách simulovaného času
         self.bus_abs_pos = 0.0
@@ -125,6 +144,15 @@ class BusSimulatorSimpleLine:
         self.audio_queue_timer = 0.0
         self.audio_to_play = None
         self.audio_playlist = [] 
+        # Random break scheduling state (pro ENABLE_RANDOM_BREAKS)
+        self._scheduled_break = None
+        # support multiple scheduled breaks generated at start (abs positions)
+        self._scheduled_breaks = []
+        self._break_active = False
+        # Track breaks per direction so we limit to max 2 in one direction
+        self._breaks_done = 0
+        self._breaks_direction = None  # which direction had breaks (True=tam, False=zpět)
+        self._break_positions = []
         
         # Hlášení
         self.next_stop_announced = False 
@@ -132,6 +160,11 @@ class BusSimulatorSimpleLine:
         self.leg_start_pos = 0.0
         # Úvodní sekvence na první zastávce: zavřeno -> otevřít (se zvukem) -> zavřít (se zvukem) -> rozjezd
         self.startup_sequence_done = False
+        # Po inicializaci naplánuj poruchy pro tento směr
+        try:
+            self._generate_scheduled_breaks()
+        except Exception:
+            pass
 
     def prebuild_route(self):
         self.stops = []
@@ -147,13 +180,83 @@ class BusSimulatorSimpleLine:
                 current_dist = minute_mark * 60.0
                 self.stops.append({"nazev": name, "dist": current_dist, "file": fname})
         else:
-            # pro směr zpět použij časovou osu obráceně
-            times = [x[1] * 60.0 for x in zdroj]
-            names = [x[0] for x in zdroj]
-            files = [x[2] for x in zdroj]
-            total_time = times[-1] if times else 0.0
-            for name, t, fname in zip(names, times, files):
-                self.stops.append({"nazev": name, "dist": total_time - t, "file": fname})
+            # pro směr zpět: vezmeme původní časovou osu (neobráčenou),
+            # zjistíme celkový čas trasy a pro každou zastávku v opačném pořadí
+            # spočítáme dist = total_time - (minute_mark * 60).
+            orig = self.trasa_segmenty
+            if orig:
+                total_time = orig[-1][1] * 60.0
+            else:
+                total_time = 0.0
+            for name, minute_mark, fname in zdroj:
+                # zde je zdroj už obrácený pořad (od cíle k začátku)
+                dist = max(0.0, total_time - (minute_mark * 60.0))
+                self.stops.append({"nazev": name, "dist": dist, "file": fname})
+
+    def _generate_scheduled_breaks(self):
+        """Generuje 0..2 poruch (absolutní pozice v sekundách od startu směru).
+        Poruchy jsou naplánovány pro aktuální trasu (self.stops) a přidány do
+        self._scheduled_breaks jako slovníky s klíči: abs_pos, repair_time, reason, triggered.
+        """
+        self._scheduled_breaks = []
+        if not self.stops:
+            return
+        route_total = self.stops[-1]["dist"]
+        # pokud je trasa příliš krátká, žádné poruchy
+        if route_total <= 10.0:
+            return
+        count = random.randint(0, 2)
+        vehicle_type = getattr(self, 'vehicle', 'bus')
+        # pokud máme dvě poruchy, umístíme je do 2. a 4. čtvrtiny trasy
+        if count == 2:
+            q2_min, q2_max = 0.25 * route_total, 0.5 * route_total
+            q4_min, q4_max = 0.75 * route_total, min(0.95 * route_total, route_total)
+            pos1 = random.uniform(q2_min, q2_max)
+            pos2 = random.uniform(q4_min, q4_max)
+            positions = [pos1, pos2]
+        elif count == 1:
+            # náhodně vybereme buď 2. nebo 4. čtvrtinu
+            if random.choice([True, False]):
+                positions = [random.uniform(0.25 * route_total, 0.5 * route_total)]
+            else:
+                positions = [random.uniform(0.75 * route_total, min(0.95 * route_total, route_total))]
+        else:
+            positions = []
+
+        for pos in positions:
+            repair_t = random.uniform(TROLLEY_REPAIR_MIN_SEC, TROLLEY_REPAIR_MAX_SEC)
+            # vyber duvod vhodny pro typ vozidla
+            if vehicle_type == 'trolley':
+                possible = list(TROLLEY_BREAK_REASONS)
+            else:
+                possible = [r for r in TROLLEY_BREAK_REASONS if r != 'porucha_trolej']
+            reason = random.choice(possible) if possible else 'porucha'
+            self._scheduled_breaks.append({'abs_pos': pos, 'repair_time': repair_t, 'reason': reason, 'triggered': False})
+        # vždy vypiš info do konzole (i když je seznam prázdný)
+        try:
+            items = [f"{b['abs_pos']:.1f}s:{b['reason']}" for b in self._scheduled_breaks]
+            print(f"[DEBUG] Naplánované poruchy pro linku {self.line_id}: {len(self._scheduled_breaks)} -> {items}")
+        except Exception:
+            print(f"[DEBUG] Naplánované poruchy pro linku {self.line_id}: {len(self._scheduled_breaks)}")
+
+    def _compute_schedule_times(self):
+        """Vypočítá plánované časy příjezdu (`sched_dt` a `sched_str`) pro každou zastávku
+        na základě `self.departure_time` a `stop['dist']` (v sekundách).
+        """
+        if not hasattr(self, 'departure_time') or self.departure_time is None:
+            try:
+                self.departure_time = datetime.datetime.now()
+            except Exception:
+                self.departure_time = datetime.datetime.today()
+        for s in self.stops:
+            try:
+                sched_dt = self.departure_time + datetime.timedelta(seconds=float(s.get('dist', 0.0)))
+                s['sched_dt'] = sched_dt
+                # zobrazovat pouze hodiny a minuty
+                s['sched_str'] = sched_dt.strftime('%H:%M')
+            except Exception:
+                s['sched_dt'] = None
+                s['sched_str'] = ''
 
     def play_sound(self, category, filename):
         if not pygame.mixer.get_init(): return 0.0
@@ -170,6 +273,35 @@ class BusSimulatorSimpleLine:
                 return length
             except: return 0.0
         return 0.0
+
+    def _queue_line_delay_announce(self, reason_key: str):
+        """Slozi a naplni audio_playlist hlasku ve formatu:
+        linka_cislo + cislo_{line_id} + se_zpozdi_z_duvodu + <reason>
+        Reason_key se pripadne mapuje na konkretni soubor v audio/sys.
+        """
+        # mapovani internich klicu na konkretni audio soubory
+        reason_map = {
+            'porucha_trolej': 'porucha_trolej',
+            'strom_na_vedeni': 'strom_na_vedeni',
+            'nehoda': 'nehoda_automobil',
+            'porucha': 'porucha'
+        }
+        reason_file = reason_map.get(reason_key, reason_key)
+
+        # pridame poradi, ktere odpovida existujicim souborum v audio/sys
+        # 1) "Linka cislo"
+        self.audio_playlist.append(('sys', 'linka_cislo'))
+        # 2) cislo jako slovo/varianta - preferujeme `cislo_{id}`
+        self.audio_playlist.append(('sys', f'cislo_{self.line_id}'))
+        # 3) spojovaci fraze
+        self.audio_playlist.append(('sys', 'se_zpozdi_z_duvodu'))
+        # 4) prave duvod
+        self.audio_playlist.append(('sys', reason_file))
+        # také loguj textovou podobu hlášení pro ladění
+        try:
+            print(f"[ANN] linka_cislo cislo_{self.line_id} se_zpozdi_z_duvodu {reason_file}")
+        except Exception:
+            pass
 
     def check_current_stop_announcement(self, time_to_go):
         if not self.current_stop_announced and time_to_go <= CURRENT_STOP_ANNOUNCE_BEFORE_SEC:
@@ -215,6 +347,37 @@ class BusSimulatorSimpleLine:
                     self.audio_playlist.append(('sys', 'pristi_zastavka'))
                     self.audio_playlist.append(('stops', self.stops[self.stop_index]['file']))
                     print(f"📢 [INFO] Průjezd poloviny úseku ({time_traveled:.1f}/{leg_total_time:.1f}s) - hlásím příští zastávku.")
+            # Zkontroluj naplánované poruchy vytvořené při startu/otočení směru.
+            try:
+                if self._scheduled_breaks and not self._break_active:
+                    for br in self._scheduled_breaks:
+                        if br.get('triggered'):
+                            continue
+                        if self.bus_abs_pos >= br.get('abs_pos', 0.0):
+                            br['triggered'] = True
+                            self._break_active = True
+                            self.state = 'BROKEN'
+                            self.timer = 0.0
+                            self.repair_timer = br.get('repair_time', 10.0)
+                            self.break_reason = br.get('reason', 'porucha')
+                            # upozorni cestující: složená hláška
+                            self.audio_playlist.append(('sys', 'gong'))
+                            self._queue_line_delay_announce(self.break_reason)
+                            # zaznamenej pozici poruchy a pocet poruch v tomto smeru
+                            try:
+                                abs_pos = float(br.get('abs_pos', 0.0))
+                                self._break_positions.append(abs_pos)
+                                self._breaks_done += 1
+                                if self._breaks_direction is None:
+                                    self._breaks_direction = self.smer_tam
+                            except Exception:
+                                pass
+                            print(f"[DEBUG] Line {self.line_id} BROKEN: reason={self.break_reason}, repair={self.repair_timer:.1f}s, abs_pos={abs_pos:.1f}")
+                            break
+            except Exception:
+                pass
+            
+            # (logování přesunuto do místa, kde se hlášení skutečně spouští)
 
             self.check_current_stop_announcement(time_to_go)
 
@@ -237,6 +400,19 @@ class BusSimulatorSimpleLine:
                 self.timer = 0
                 self.current_wait_limit = 1.0
 
+        elif self.state == "BROKEN":
+            # Vozidlo je v poruše: čekáme na dokončení opravy (repair_timer nastavován při přechodu do BROKEN)
+            self.timer += dt
+            if self.timer >= getattr(self, 'repair_timer', 0.0):
+                # oprava hotova -> pokračovat v jízdě
+                self._break_active = False
+                self.timer = 0.0
+                # po oprave jedeme dal (neotevirame dveře automaticky)
+                self.state = "DRIVING"
+                # resetuj oznaceni hlasek pro aktualni usek
+                self.next_stop_announced = False
+                self.current_stop_announced = False
+            
         elif self.state == "STOPPED":
             self.timer += dt
             if self.timer > self.current_wait_limit:
@@ -268,6 +444,23 @@ class BusSimulatorSimpleLine:
                         self.bus_abs_pos = 0.0
                         self.stop_index = 0
                         self.gui_stop_index = 0
+                        # reset poruch pro novy smer a naplanuj nove
+                        self._breaks_done = 0
+                        self._break_positions = []
+                        self._breaks_direction = None
+                        try:
+                            self._generate_scheduled_breaks()
+                        except Exception:
+                            pass
+                        # aktualizuj plánovaný čas odjezdu a přepočítej časy
+                        try:
+                            self.departure_time = datetime.datetime.now()
+                        except Exception:
+                            self.departure_time = datetime.datetime.today()
+                        try:
+                            self._compute_schedule_times()
+                        except Exception:
+                            pass
                         # aktualizuj titulek a cílovou stanici
                         try:
                             if self.trasa_segmenty:
@@ -337,6 +530,11 @@ class BusSimulatorSimpleLine:
                                     (line_x - e_w//2, current_y - e_h//2, e_w, e_h))
                 lbl = self.font_stop_list.render(stop["nazev"], True, TEXT_BLACK)
                 self.screen.blit(lbl, (line_x + 50, current_y - lbl.get_height()//2))
+                # vykresli plánovaný čas příjezdu u zastávky (pokud existuje)
+                sched = stop.get('sched_str', '')
+                if sched:
+                    lbl_time = self.font_dp.render(sched, True, TEXT_BLACK)
+                    self.screen.blit(lbl_time, (line_x + 60 + lbl.get_width(), current_y - lbl_time.get_height()//2))
 
     def draw(self):
         self.screen.fill(BG_COLOR)

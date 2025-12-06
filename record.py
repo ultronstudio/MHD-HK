@@ -139,6 +139,16 @@ class RecordWindow(tk.Tk):
         self.filename_var = tk.StringVar(value="")
         self.volume_var = tk.IntVar(value=100)  # 0-200 %
 
+        # automatická aktualizace comboboxu při změně kategorie
+        try:
+            # trace_add pro novější Python; fallback na trace
+            if hasattr(self.category_var, 'trace_add'):
+                self.category_var.trace_add('write', lambda *a: self._refresh_filename_list())
+            else:
+                self.category_var.trace('w', lambda *a: self._refresh_filename_list())
+        except Exception:
+            pass
+
         self.recorder = Recorder()
         self.preview_data = None  # numpy float32
         self.preview_segment = None  # pydub.AudioSegment
@@ -180,7 +190,7 @@ class RecordWindow(tk.Tk):
             self.filename_combo.bind("<<ComboboxSelected>>", lambda e: self._on_filename_selected())
         except Exception:
             pass
-        ttk.Button(main, text="↻ Načíst", command=self._load_stop_names).grid(row=1, column=2, pady=(10, 0), sticky="w")
+        ttk.Button(main, text="↻ Načíst", command=self._refresh_filename_list).grid(row=1, column=2, pady=(10, 0), sticky="w")
 
         # Hlasitost
         ttk.Label(main, text="Hlasitost:").grid(row=2, column=0, pady=(10, 0), sticky="w")
@@ -237,9 +247,14 @@ class RecordWindow(tk.Tk):
         # Info
         self.info_label = ttk.Label(main, text="Připraveno", foreground="#666")
         self.info_label.grid(row=6, column=0, columnspan=3, pady=(10, 0), sticky="w")
-        # Načti seznam zastávek při startu
+        # Načti seznam zastávek při startu a naplň combobox podle aktuální kategorie
         try:
             self._load_stop_names()
+        except Exception:
+            pass
+        try:
+            # zabezpečené naplnění comboboxu podle výchozí hodnoty self.category_var
+            self._refresh_filename_list()
         except Exception:
             pass
 
@@ -549,6 +564,10 @@ class RecordWindow(tk.Tk):
 
     def _load_stop_names(self):
         # Načti unikátní audio klíče ze všech JSON v adresáři lines
+        # Tento původní handler už není volán přímo.
+        return self._get_stop_names()
+
+    def _get_stop_names(self):
         names = set()
         try:
             for fname in os.listdir(LINES_DIR):
@@ -566,16 +585,50 @@ class RecordWindow(tk.Tk):
                             if a:
                                 names.add(a)
                 except Exception:
-                    # ignoruj nevalidní JSON
                     continue
         except Exception:
             names = set()
-        sorted_names = sorted(names, key=lambda x: x.lower())
-        # naplnit combobox
+        return sorted(names, key=lambda x: x.lower())
+
+    def _get_sys_names(self):
+        names = set()
         try:
-            self.filename_combo["values"] = sorted_names
-            if sorted_names and not self.filename_var.get():
-                self.filename_var.set(sorted_names[0])
+            for fname in os.listdir(SYS_AUDIO_DIR):
+                if not (fname.lower().endswith('.mp3') or fname.lower().endswith('.wav')):
+                    continue
+                base = os.path.splitext(fname)[0]
+                if base:
+                    names.add(base)
+        except Exception:
+            names = set()
+        return sorted(names, key=lambda x: x.lower())
+
+    def _refresh_filename_list(self):
+        # Aktualizovat hodnoty v comboboxu podle zvolené kategorie
+        try:
+            cat = self.category_var.get()
+        except Exception:
+            cat = 'stops'
+        values = []
+        try:
+            if cat == 'sys':
+                values = self._get_sys_names()
+            else:
+                values = self._get_stop_names()
+        except Exception:
+            values = []
+        try:
+            self.filename_combo['values'] = values
+            # pokud je aktuální hodnota prázdná nebo není v novém seznamu, nastav první
+            cur = (self.filename_var.get() or '').strip()
+            if not cur and values:
+                self.filename_var.set(values[0])
+            elif cur and cur not in values:
+                # pokud aktuální není platný pro novou kategorii, vyber první
+                if values:
+                    self.filename_var.set(values[0])
+                else:
+                    self.filename_var.set('')
         except Exception:
             pass
 

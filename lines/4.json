@@ -1,5 +1,6 @@
 {
   "id": "4",
+  "vehicle": "trolley",
   "description": "TERMINÁL HD > POD STRÁNÍ",
   "stops": [
     { "name": "TERMINÁL HD", "distance": 0, "audio": "terminal_hd" },
