@@ -257,34 +257,41 @@ class BusSimulatorSimpleLine:
         elif self.state == "DOORS_CLOSED":
             self.timer += dt
             if self.timer > self.current_wait_limit:
-                # Pokud jsme na úplném začátku, už proběhne otevření ve STOPPED -> DOORS_OPEN,
-                # takže tady není třeba sekvenci nutit.
-                # po zavření dveří se buď rozjíždíme, nebo jdeme na režim konečné
-                if self.stop_index == len(self.stops) - 1: 
-                    # konečná: nejprve výstup (dveře otevřít + zavřít), pak přesun na nultou zastávku
-                    self.state = "LAYOVER"
-                else:
-                    # dveře zavřené -> rozjezd
-                    self.stop_index += 1
-                    self.state = "DRIVING"
-                    self.next_stop_announced = False
-                    self.current_stop_announced = False
-                    self.leg_start_pos = self.bus_abs_pos
-                self.timer = 0
-
-        elif self.state == "LAYOVER":
-            # konečná: simulace výstupu/nástupu
-            self.timer += dt
-            # fáze 1: otevřít dveře a vyložit cestující
-            if self.timer == 0:
-                pass
-            if self.timer > 0 and self.timer < LAYOVER_TIME/3:
-                # první třetina: otevření dveří + čekání
-                # přehraj pouze jednou na začátku této fáze
-                # využij menší trik: nastav current_wait_limit na DOOR_TIME
-                if abs(self.timer - 0) < 0.02:
+            # Při nástupu/otočení: nejprve otočit trasu, pak otevřít dveře, počkat na nástup, pak zavřít dveře.
+            # Při vstupu do LAYOVER (timer ~ 0) proveď změnu směru a přípravu trasy.
+            if abs(self.timer - 0) < 0.02:
+                try:
+                    # přepnout směr a připravit novou trasu okamžitě
+                    self.smer_tam = not self.smer_tam
+                    self.prebuild_route()
+                    self.bus_abs_pos = 0.0
+                    self.stop_index = 0
+                    self.gui_stop_index = 0
+                    # otevři dveře pro nástup
                     self.play_sound('sys', 'bus_door')
-            # fáze 2: zavření dveří po výstupu
+                    # aktualizuj titulek okna a cílovou stanici
+                    try:
+                        if self.trasa_segmenty:
+                            if self.smer_tam:
+                                self.dest_name = self.trasa_segmenty[-1][0].upper()
+                            else:
+                                self.dest_name = self.trasa_segmenty[0][0].upper()
+                        dir_text = "TAM" if self.smer_tam else "ZPĚT"
+                        caption = f"{self.line_id} | {getattr(self, 'desc', '')} (směr: {dir_text})" if getattr(self, 'desc', '') else f"Linka {self.line_id} (směr: {dir_text})"
+                        try:
+                            pygame.display.set_caption(caption)
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+            # Náhod: během většiny pauzy je otevřeno a probíhá nástup.
+            # Krátce před koncem pauzy zavřít dveře (buzzer) a poté vyjet.
+            if self.timer >= LAYOVER_TIME - 2.0 and self.timer < LAYOVER_TIME:
+                if abs(self.timer - (LAYOVER_TIME - 2.0)) < 0.02:
+                    self.play_sound('sys', 'buzzer')
             if self.timer >= LAYOVER_TIME/3 and self.timer < 2*LAYOVER_TIME/3:
                 if abs(self.timer - LAYOVER_TIME/3) < 0.02:
                     self.play_sound('sys', 'buzzer')
