@@ -1,0 +1,22 @@
+{
+  "id": "1",
+  "description": "Terminál HD > Kluky (planetárium)",
+  "stops": [
+    { "name": "TERMINÁL HD", "distance": 0, "audio": "terminal_hd" },
+    { "name": "HLAVNÍ NÁDRAŽÍ", "distance": 1, "audio": "hlavni_nadrazi" },
+    { "name": "OD TESCO a ATRIUM", "distance": 3, "audio": "tesco_atrium" },
+    { "name": "Střelnice", "distance": 4, "audio": "strelnice" },
+    { "name": "Lipky", "distance": 6, "audio": "lipky" },
+    { "name": "Labská k. Obří akvárium", "distance": 7, "audio": "labska_akvarium" },
+    { "name": "Fakultní nemocnice", "distance": 9, "audio": "fakultni_nemocnice" },
+    { "name": "Heyrovského", "distance": 11, "audio": "heyrovskeho" },
+    { "name": "Hotel Garni", "distance": 13, "audio": "hotel_garni" },
+    { "name": "Futurum", "distance": 14, "audio": "futurum" },
+    { "name": "Na Brně", "distance": 16, "audio": "na_brne" },
+    { "name": "Na Plachtě", "distance": 17, "audio": "na_plachte" },
+    { "name": "Zvonička", "distance": 19, "audio": "zvonicka" },
+    { "name": "NOVÝ HRADEC KRÁLOVÉ", "distance": 20, "audio": "nhk" },
+    { "name": "Domov U Biřičky", "distance": 21, "audio": "biricka" },
+    { "name": "KLUKY (PLANETÁRIUM)", "distance": 23, "audio": "kluky_planetarium" }
+  ]
+}

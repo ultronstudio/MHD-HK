@@ -1,0 +1,20 @@
+{
+  "id": "2",
+  "description": "Terminál HD > Nový Hradec Králové",
+  "stops": [
+    { "name": "TERMINÁL HD", "distance": 0, "audio": "terminal_hd" },
+    { "name": "HLAVNÍ NÁDRAŽÍ", "distance": 1, "audio": "hlavni_nadrazi" },
+    { "name": "Gočárova třída", "distance": 3, "audio": "gocarova" },
+    { "name": "Ulrichovo náměstí", "distance": 5, "audio": "ulrichovo" },
+    { "name": "Adalbertinum", "distance": 8, "audio": "adalbertinum" },
+    { "name": "Magistrát města", "distance": 10, "audio": "magistrat" },
+    { "name": "Komenského", "distance": 12, "audio": "komenskeho" },
+    { "name": "Zimní stadion", "distance": 13, "audio": "zimni_stadion" },
+    { "name": "Hotel Garni", "distance": 17, "audio": "hotel_garni" },
+    { "name": "Futurum", "distance": 18, "audio": "futurum" },
+    { "name": "Na Brně", "distance": 20, "audio": "na_brne" },
+    { "name": "Na Plachtě", "distance": 21, "audio": "na_plachte" },
+    { "name": "Zvonička", "distance": 23, "audio": "zvonicka" },
+    { "name": "NOVÝ HRADEC KRÁLOVÉ", "distance": 24, "audio": "nhk" }
+  ]
+}

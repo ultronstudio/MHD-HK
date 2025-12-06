@@ -1,0 +1,28 @@
+{
+  "id": "3",
+  "description": "Plačice > Slezské Předměstí, Cihelna",
+  "stops": [
+    { "name": "PLAČICE", "distance": 0, "audio": "placice" },
+    { "name": "Vlčkovická", "distance": 2, "audio": "xvickovicka" },
+    { "name": "KUKLENY ALBERT", "distance": 4, "audio": "kukleny_albert" },
+    { "name": "Bláhovka", "distance": 6, "audio": "blahovka" },
+    { "name": "KUKLENY náměstí", "distance": 7, "audio": "kukleny_namesti" },
+    { "name": "Anenské náměstí", "distance": 8, "audio": "anenske_namesti" },
+    { "name": "Základní škola Kukleny", "distance": 9, "audio": "zs_kukleny" },
+    { "name": "Veterinární škola", "distance": 10, "audio": "veterinarni_skola" },
+    { "name": "ZVU", "distance": 11, "audio": "zvu" },
+    { "name": "HLAVNÍ NÁDRAŽÍ", "distance": 15, "audio": "hlavni_nadrazi" },
+    { "name": "OD TESCO a ATRIUM", "distance": 17, "audio": "tesco_atrium" },
+    { "name": "Centrál", "distance": 18, "audio": "central" },
+    { "name": "Muzeum", "distance": 20, "audio": "muzeum" },
+    { "name": "Magistrát města", "distance": 22, "audio": "magistrat_mesta" },
+    { "name": "Buzulucká", "distance": 24, "audio": "buzulucka" },
+    { "name": "Dopravní podnik", "distance": 25, "audio": "dopravni_podnik" },
+    { "name": "Dům L", "distance": 26, "audio": "dum_l" },
+    { "name": "Sever střed", "distance": 27, "audio": "sever_stred" },
+    { "name": "Alessandria", "distance": 28, "audio": "alessandria" },
+    { "name": "Škola SNP", "distance": 30, "audio": "skola_snp" },
+    { "name": "Slezské Př.- nádraží", "distance": 31, "audio": "sp_nadrazi" },
+    { "name": "SLEZSKÉ PŘ.- CIHELNA", "distance": 32, "audio": "sp_cihelna" }
+  ]
+}

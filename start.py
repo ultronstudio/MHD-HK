@@ -1,0 +1,142 @@
+import json
+import os
+import subprocess
+import sys
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LINES_DIR = os.path.join(BASE_DIR, "lines")
+
+APP_TITLE = "MHD HK – Bus Simulator"
+APP_VERSION = "0.1.0"
+APP_AUTHOR = "Petr Vurm"
+
+def load_lines():
+    lines = []
+    if not os.path.isdir(LINES_DIR):
+        return lines
+
+    for filename in os.listdir(LINES_DIR):
+        if not filename.endswith(".json"):
+            continue
+        path = os.path.join(LINES_DIR, filename)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            line_id = data.get("id") or os.path.splitext(filename)[0]
+            desc = data.get("description", "")
+            lines.append({
+                "id": line_id,
+                "description": desc,
+                "file": path,
+            })
+        except Exception as e:
+            print(f"Nepodařilo se načíst {filename}: {e}")
+    return sorted(lines, key=lambda x: x["id"])
+
+
+def run_simulator(line_id: str, direction: str):
+    """Spustí hlavní simulátor jako nový proces.
+
+    direction: "tam" nebo "zpet" – zatím se nepředává do Pygame okna,
+    ale je připravené pro budoucí rozšíření (např. přes argv).
+    """
+    python_exe = sys.executable or "python"
+    cmd = [python_exe, os.path.join(BASE_DIR, "main.py"), line_id, direction]
+
+    try:
+        subprocess.Popen(cmd, cwd=BASE_DIR)
+    except Exception as e:
+        messagebox.showerror("Chyba", f"Simulátor se nepodařilo spustit:\n{e}")
+
+
+class StartWindow(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title(APP_TITLE)
+        self.resizable(False, False)
+
+        self.lines = load_lines()
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        self._build_ui()
+
+    def _build_ui(self):
+        main = ttk.Frame(self, padding=15)
+        main.grid(row=0, column=0, sticky="nsew")
+
+        # Výběr linky
+        ttk.Label(main, text="Linka:").grid(row=0, column=0, sticky="w")
+
+        self.line_var = tk.StringVar()
+        line_names = [f"{l['id']} | {l['description']}" for l in self.lines] or ["Žádné linky nenalezeny"]
+        self.line_combo = ttk.Combobox(main, textvariable=self.line_var, values=line_names, state="readonly", width=35)
+        if self.lines:
+            self.line_combo.current(0)
+        self.line_combo.grid(row=0, column=1, padx=(5, 0), sticky="w")
+
+        # Směr
+        ttk.Label(main, text="Směr:").grid(row=1, column=0, pady=(10, 0), sticky="w")
+
+        self.direction_var = tk.StringVar(value="tam")
+        dir_frame = ttk.Frame(main)
+        dir_frame.grid(row=1, column=1, padx=(5, 0), pady=(10, 0), sticky="w")
+
+        ttk.Radiobutton(dir_frame, text="Směr TAM (Nový Hradec Králové)", variable=self.direction_var, value="tam").grid(row=0, column=0, sticky="w")
+        ttk.Radiobutton(dir_frame, text="Směr ZPĚT (Terminál HD)", variable=self.direction_var, value="zpet").grid(row=1, column=0, sticky="w")
+
+        # Tlačítka
+        btn_frame = ttk.Frame(main)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=(15, 0), sticky="e")
+
+        about_btn = ttk.Button(btn_frame, text="O aplikaci", command=self.show_about)
+        about_btn.grid(row=0, column=0, padx=(0, 5))
+
+        start_btn = ttk.Button(btn_frame, text="Spustit", command=self.on_start)
+        start_btn.grid(row=0, column=1)
+
+    def on_start(self):
+        if not self.lines:
+            messagebox.showwarning("Žádné linky", "Nebyl nalezen žádný soubor s definicí linky v adresáři 'lines'.")
+            return
+
+        idx = self.line_combo.current()
+        if idx < 0 or idx >= len(self.lines):
+            messagebox.showwarning("Výběr", "Vyberte prosím linku.")
+            return
+
+        line = self.lines[idx]
+        direction = self.direction_var.get()
+
+        # schovej okno startéru a spusť simulátor blokujícím způsobem
+        self.withdraw()
+        python_exe = sys.executable or "python"
+        cmd = [python_exe, os.path.join(BASE_DIR, "main.py"), line["id"], direction]
+
+        try:
+            subprocess.run(cmd, cwd=BASE_DIR)
+        except Exception as e:
+            messagebox.showerror("Chyba", f"Simulátor se nepodařilo spustit:\n{e}")
+        finally:
+            # po ukončení simulátoru znovu ukaž start okno
+            self.deiconify()
+
+    def show_about(self):
+        text = (
+            f"{APP_TITLE}\n"
+            f"Verze: {APP_VERSION}\n\n"
+            "Autor: Petr Vurm (ultronstudio)\n"
+            "Projekt: MHD-HK – simulátor informačního panelu MHD v Hradci Králové.\n\n"
+            "Zdrojový kód je licencován pod MIT licencí (viz LICENSE). "
+            "Hlasové nahrávky v adresáři 'audio/' nejsou volně licencovány a jejich použití "
+            "mimo tento repozitář bez výslovného souhlasu autora je zakázáno."
+        )
+        messagebox.showinfo("O aplikaci", text)
+
+    def on_close(self):
+        self.destroy()
+
+if __name__ == "__main__":
+    app = StartWindow()
+    app.mainloop()
