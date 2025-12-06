@@ -9,7 +9,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LINES_DIR = os.path.join(BASE_DIR, "lines")
 
 APP_TITLE = "MHD HK – Bus Simulator"
-APP_VERSION = "0.1.0"
+APP_VERSION = "1.1.0"
 APP_AUTHOR = "Petr Vurm"
 
 def load_lines():

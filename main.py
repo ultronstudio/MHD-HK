@@ -29,7 +29,7 @@ STOPS_AUDIO_DIR = os.path.join(AUDIO_DIR, "stops")
 
 DOOR_TIME = 8.0           # doba otevřených dveří (s)
 LAYOVER_TIME = 10.0       # pauza na konečné (s)
-TIME_SCALE = 4.0          # 1 reálná sekunda = 4 s simulovaného času
+TIME_SCALE = 8.0          # 1 reálná sekunda = 8 s simulovaného času
 
 # jak dlouho před příjezdem se má hlásit
 NEXT_STOP_ANNOUNCE_BEFORE_SEC = 60.0    # "příští zastávka"
@@ -82,6 +82,7 @@ class BusSimulatorSimpleLine:
         try:
             line_data, self.trasa_segmenty = load_line_definition(line_id)
             desc = line_data.get("description", "")
+            self.desc = desc
             # cílová stanice = poslední zastávka v aktuálním směru
             if self.trasa_segmenty:
                 if self.smer_tam:
@@ -97,6 +98,7 @@ class BusSimulatorSimpleLine:
             print(f"Chyba při načítání definice linky {line_id}: {e}")
             self.trasa_segmenty = []
             self.dest_name = ""
+            self.desc = ""
             caption = "MHD HK - Bus Simulator"
 
         pygame.display.set_caption(caption)
@@ -202,14 +204,17 @@ class BusSimulatorSimpleLine:
             leg_total_time = target_time - self.leg_start_pos
             time_traveled = self.bus_abs_pos - self.leg_start_pos
 
-            if (not self.next_stop_announced and
-                leg_total_time > 0 and
-                (leg_total_time - time_traveled) <= NEXT_STOP_ANNOUNCE_BEFORE_SEC):
-                self.next_stop_announced = True
-                self.gui_stop_index = self.stop_index
-                self.audio_playlist.append(('sys', 'gong'))
-                self.audio_playlist.append(('sys', 'pristi_zastavka'))
-                self.audio_playlist.append(('stops', self.stops[self.stop_index]['file']))
+            # Hlášení příští zastávky: spouštět dříve (v polovině úseku),
+            # aby se nehlásilo těsně před příjezdem.
+            if not self.next_stop_announced and leg_total_time > 0:
+                # spustíme hlášení, jakmile projedeme polovinu času úseku
+                if time_traveled >= (leg_total_time * 0.5):
+                    self.next_stop_announced = True
+                    self.gui_stop_index = self.stop_index
+                    self.audio_playlist.append(('sys', 'gong'))
+                    self.audio_playlist.append(('sys', 'pristi_zastavka'))
+                    self.audio_playlist.append(('stops', self.stops[self.stop_index]['file']))
+                    print(f"📢 [INFO] Průjezd poloviny úseku ({time_traveled:.1f}/{leg_total_time:.1f}s) - hlásím příští zastávku.")
 
             self.check_current_stop_announcement(time_to_go)
 
@@ -295,6 +300,21 @@ class BusSimulatorSimpleLine:
                     self.gui_stop_index = 0
                     # otevření dveří na nástup
                     self.play_sound('sys', 'bus_door')
+                    # po přepnutí směru aktualizuj cílový název a titulek okna
+                    try:
+                        if self.trasa_segmenty:
+                            if self.smer_tam:
+                                self.dest_name = self.trasa_segmenty[-1][0].upper()
+                            else:
+                                self.dest_name = self.trasa_segmenty[0][0].upper()
+                        dir_text = "TAM" if self.smer_tam else "ZPĚT"
+                        caption = f"{self.line_id} | {getattr(self, 'desc', '')} (směr: {dir_text})" if getattr(self, 'desc', '') else f"Linka {self.line_id} (směr: {dir_text})"
+                        try:
+                            pygame.display.set_caption(caption)
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
                 # krátce před koncem pauzy zavři dveře
                 if self.timer > LAYOVER_TIME - 2.0:
                     self.play_sound('sys', 'buzzer')
