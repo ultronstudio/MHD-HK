@@ -20,7 +20,12 @@ ROUTE_RED = (200, 0, 0)         # Červená barva trasy
 
 # --- SEMAFOR BARVY ---
 # --- CESTY K SOUBORŮM ---
-AUDIO_DIR = "audio"
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# audio umístěné relativně v projektu nebo v extrahované složce _MEIPASS
+AUDIO_DIR = os.path.join(BASE_DIR, "audio")
 SYS_AUDIO_DIR = os.path.join(AUDIO_DIR, "sys")
 STOPS_AUDIO_DIR = os.path.join(AUDIO_DIR, "stops")
 

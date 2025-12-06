@@ -6,7 +6,13 @@ except Exception as e:
     print("Pillow not installed:", e)
     sys.exit(1)
 
-proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# If this script lives in a `build` subfolder, project root is its parent.
+if os.path.basename(script_dir).lower() == 'build':
+    proj_root = os.path.dirname(script_dir)
+else:
+    proj_root = script_dir
+
 logo = os.path.join(proj_root, "logo.png")
 ico = os.path.join(proj_root, "build", "logo.ico")
 

@@ -12,7 +12,7 @@ else:
 LINES_DIR = os.path.join(BASE_DIR, "lines")
 
 APP_TITLE = "MHD HK – Bus Simulator"
-APP_VERSION = "1.2.3"
+APP_VERSION = "1.3.0"
 APP_AUTHOR = "Petr Vurm"
 
 def load_lines():

@@ -1,11 +1,18 @@
 # Build script for Windows using PyInstaller
 # Run from project root in PowerShell:
-#   .\build\build.ps1
+#   .\build.ps1  (script can also live in a `build` subfolder)
 
 $ErrorActionPreference = 'Stop'
 # Urči adresář skriptu (build/) a potom rodičovský adresář projektu
+# Determine script directory and project root.
+# If this script lives in a `build` subfolder, the project root is its parent.
+# If the script is in the project root, use that as the project root.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$proj = Split-Path -Parent $scriptDir
+if ((Split-Path -Leaf $scriptDir) -ieq 'build') {
+    $proj = Split-Path -Parent $scriptDir
+} else {
+    $proj = $scriptDir
+}
 Set-Location $proj
 
 # Ensure build dir exists
@@ -30,7 +37,15 @@ $logo = Join-Path $proj 'logo.png'
 $ico = Join-Path $buildDir 'logo.ico'
 if (Test-Path $logo) {
     Write-Host "Converting logo.png -> build\logo.ico"
-    & python (Join-Path $proj 'build\build_icon.py')
+    $iconScriptRoot = Join-Path $proj 'build_icon.py'
+    $iconScriptBuild = Join-Path (Join-Path $proj 'build') 'build_icon.py'
+    if (Test-Path $iconScriptRoot) {
+        & python $iconScriptRoot
+    } elseif (Test-Path $iconScriptBuild) {
+        & python $iconScriptBuild
+    } else {
+        Write-Host "Icon script not found; skipping icon conversion"
+    }
     if (-not (Test-Path $ico)) {
         Write-Host "Icon conversion did not produce logo.ico; continuing without explicit icon"
         $iconArg = ""
@@ -57,15 +72,9 @@ Write-Host "Building single start.exe (onefile) with bundled data..."
 
 # výsledný název exe
 $outputName = 'mhd-hk-sim'
-$pyiArgs = @('--noconfirm','--onefile','--distpath',$buildDir,'--name',$outputName)
+$pyiArgs = @('--noconfirm','--onefile','--windowed','--distpath',$buildDir,'--name',$outputName)
 if ($iconArg -ne "") { $pyiArgs += $iconArg }
 
-# include version resource file if present
-$versionFile = Join-Path $proj 'build\version_file.txt'
-if (Test-Path $versionFile) {
-    Write-Host "Using version resource: $versionFile"
-    $pyiArgs += ('--version-file'); $pyiArgs += $versionFile
-}
 foreach ($d in $addDataArgs) { $pyiArgs += ('--add-data'); $pyiArgs += $d }
 $pyiArgs += (Join-Path $proj 'start.py')
 

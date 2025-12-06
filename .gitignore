@@ -20,4 +20,6 @@ Thumbs.db
 
 # logy
 *.log
-/build/
+# build output
+build/
+*.spec
