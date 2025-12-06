@@ -80,7 +80,21 @@ class BusSimulatorSimpleLine:
         self.font_time = pygame.font.SysFont('Arial', 60, bold=True)
         self.font_stop_list = pygame.font.SysFont('Arial', 50, bold=True) 
         self.font_footer = pygame.font.SysFont('Arial', 55, bold=True)
-        self.font_dp = pygame.font.SysFont('Times New Roman', 50, bold=True, italic=True)
+        # malé písmo pro plánované časy (bude dynamicky zmenšeno, aby se vešlo do oválu)
+        self.font_dp = pygame.font.SysFont('Arial', 28, bold=True)
+
+        def _render_text_fit(text, max_w, max_h, font_name='Arial', bold=True, start_size=28):
+            # Vrátí surface s textem, který se vejde do max_w x max_h, snižuje velikost písma.
+            for size in range(start_size, 8, -1):
+                f = pygame.font.SysFont(font_name, size, bold=bold)
+                surf = f.render(text, True, TEXT_WHITE)
+                if surf.get_width() <= max_w - 6 and surf.get_height() <= max_h - 4:
+                    return surf
+            # fallback - použij poslední vytvořený
+            return pygame.font.SysFont(font_name, 10, bold=bold).render(text, True, TEXT_WHITE)
+
+        # helper uložíme jako atribut instance
+        self._render_text_fit = _render_text_fit
 
         self.stops = []
         self.smer_tam = (direction == "tam")
@@ -339,14 +353,14 @@ class BusSimulatorSimpleLine:
             # Hlášení příští zastávky: spouštět dříve (v polovině úseku),
             # aby se nehlásilo těsně před příjezdem.
             if not self.next_stop_announced and leg_total_time > 0:
-                # spustíme hlášení, jakmile projedeme polovinu času úseku
-                if time_traveled >= (leg_total_time * 0.5):
+                # spustíme hlášení už v první čtvrtině času úseku
+                if time_traveled >= (leg_total_time * 0.25):
                     self.next_stop_announced = True
                     self.gui_stop_index = self.stop_index
                     self.audio_playlist.append(('sys', 'gong'))
                     self.audio_playlist.append(('sys', 'pristi_zastavka'))
                     self.audio_playlist.append(('stops', self.stops[self.stop_index]['file']))
-                    print(f"📢 [INFO] Průjezd poloviny úseku ({time_traveled:.1f}/{leg_total_time:.1f}s) - hlásím příští zastávku.")
+                    print(f"📢 [INFO] Průjezd čtvrtiny úseku ({time_traveled:.1f}/{leg_total_time:.1f}s) - hlásím příští zastávku.")
             # Zkontroluj naplánované poruchy vytvořené při startu/otočení směru.
             try:
                 if self._scheduled_breaks and not self._break_active:
@@ -511,8 +525,9 @@ class BusSimulatorSimpleLine:
 
         # Aktuální zastávka
         ellipse_w, ellipse_h = 70, 44
+        # vycentrovat hlavní ovál přesně na osu
         pygame.draw.ellipse(self.screen, TEXT_BLACK, 
-                            (line_x - ellipse_w//2, line_bottom - ellipse_h//2 - 10, ellipse_w, ellipse_h))
+                    (line_x - ellipse_w//2, line_bottom - ellipse_h//2, ellipse_w, ellipse_h))
 
         stops_to_show = 4
         start_y = line_bottom - 110
@@ -526,15 +541,45 @@ class BusSimulatorSimpleLine:
                 if current_y < 150: break
 
                 e_w, e_h = 50, 30
-                pygame.draw.ellipse(self.screen, TEXT_BLACK, 
-                                    (line_x - e_w//2, current_y - e_h//2, e_w, e_h))
-                lbl = self.font_stop_list.render(stop["nazev"], True, TEXT_BLACK)
-                self.screen.blit(lbl, (line_x + 50, current_y - lbl.get_height()//2))
-                # vykresli plánovaný čas příjezdu u zastávky (pokud existuje)
+                # ovál vykreslíme tak, aby byl vycentrován na linii
+                oval_rect = (line_x - e_w//2, current_y - e_h//2, e_w, e_h)
+                pygame.draw.ellipse(self.screen, TEXT_BLACK, oval_rect)
+
+                # název zastávky zarovnaný na pevnou pozici (vpravo od osy), oříznutí dlouhých názvů
+                name = stop.get("nazev", "")
+                # pevná levá pozice pro začátek názvů
+                label_x = line_x + (ellipse_w // 2) + 20
+                # maximální šířka pro štítek
+                max_label_w = max(40, W - label_x - 20)
+                lbl = self.font_stop_list.render(name, True, TEXT_BLACK)
+                if lbl.get_width() > max_label_w:
+                    # jednoduché oříznutí s elipsou — zkus odhadnout počet znaků
+                    approx_chars = max(3, int(len(name) * (max_label_w / lbl.get_width())) - 1)
+                    short = name[:approx_chars].rstrip()
+                    # doplň tečku pokud se ještě nevejde
+                    while self.font_stop_list.render(short + '…', True, TEXT_BLACK).get_width() > max_label_w and len(short) > 3:
+                        short = short[:-1]
+                    short = short + '…'
+                    lbl = self.font_stop_list.render(short, True, TEXT_BLACK)
+                self.screen.blit(lbl, (label_x, current_y - lbl.get_height()//2))
+
+                # vykresli plánovaný čas příjezdu VEDLE oválu (brand barva, stejny font jako jmena)
                 sched = stop.get('sched_str', '')
                 if sched:
-                    lbl_time = self.font_dp.render(sched, True, TEXT_BLACK)
-                    self.screen.blit(lbl_time, (line_x + 60 + lbl.get_width(), current_y - lbl_time.get_height()//2))
+                    # použijeme stejný font jako pro seznam zastávek, barva brand (ROUTE_RED)
+                    try:
+                        # menší font pro plánované časy
+                        lbl_time = self.font_dp.render(sched, True, ROUTE_RED)
+                        # umístit vlevo od oválu s malou mezerou
+                        left_x = line_x - (e_w // 2) - 10 - lbl_time.get_width()
+                        self.screen.blit(lbl_time, (left_x, current_y - lbl_time.get_height()//2))
+                    except Exception:
+                        # fallback: jednoduché renderování menším fontem bíle uvnitř oválu
+                        max_w, max_h = e_w, e_h
+                        surf_time = self._render_text_fit(sched, max_w, max_h, font_name='Arial', bold=True, start_size=28)
+                        oval_cx = line_x
+                        oval_cy = current_y
+                        self.screen.blit(surf_time, (oval_cx - surf_time.get_width()//2, oval_cy - surf_time.get_height()//2))
 
     def draw(self):
         self.screen.fill(BG_COLOR)
