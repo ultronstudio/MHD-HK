@@ -1,0 +1,19 @@
+{
+  "id": "4",
+  "description": "TERMINÁL HD > POD STRÁNÍ",
+  "stops": [
+    { "name": "TERMINÁL HD", "distance": 0, "audio": "terminal_hd" },
+    { "name": "HLAVNÍ NÁDRAŽÍ", "distance": 1, "audio": "hlavni_nadrazi" },
+    { "name": "OD TESCO a ATRIUM", "distance": 3, "audio": "tesco_atrium" },
+    { "name": "Centrál", "distance": 4, "audio": "central" },
+    { "name": "Muzeum", "distance": 6, "audio": "muzeum" },
+    { "name": "Magistrát města", "distance": 8, "audio": "magistrat" },
+    { "name": "Komenského", "distance": 10, "audio": "komenskeho" },
+    { "name": "Zimní stadion", "distance": 11, "audio": "zimni_stadion" },
+    { "name": "Hotel Garni", "distance": 15, "audio": "hotel_garni" },
+    { "name": "Futurum", "distance": 16, "audio": "futurum" },
+    { "name": "Na Brně", "distance": 18, "audio": "na_brne" },
+    { "name": "Palachova", "distance": 19, "audio": "palachova" },
+    { "name": "POD STRÁNÍ", "distance": 21, "audio": "pod_strani" }
+  ]
+}

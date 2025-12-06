@@ -15,7 +15,7 @@
     { "name": "OD TESCO a ATRIUM", "distance": 17, "audio": "tesco_atrium" },
     { "name": "Centrál", "distance": 18, "audio": "central" },
     { "name": "Muzeum", "distance": 20, "audio": "muzeum" },
-    { "name": "Magistrát města", "distance": 22, "audio": "magistrat_mesta" },
+    { "name": "Magistrát města", "distance": 22, "audio": "magistrat" },
     { "name": "Buzulucká", "distance": 24, "audio": "buzulucka" },
     { "name": "Dopravní podnik", "distance": 25, "audio": "dopravni_podnik" },
     { "name": "Dům L", "distance": 26, "audio": "dum_l" },
