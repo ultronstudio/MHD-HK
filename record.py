@@ -22,7 +22,10 @@ try:
 except Exception:
     sa = None
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AUDIO_DIR = os.path.join(BASE_DIR, "audio")
 SYS_AUDIO_DIR = os.path.join(AUDIO_DIR, "sys")
 STOPS_AUDIO_DIR = os.path.join(AUDIO_DIR, "stops")
@@ -131,8 +134,25 @@ class Recorder:
 class RecordWindow(tk.Tk):
     def __init__(self):
         super().__init__()
+        # na Windows nastavíme AppUserModelID, aby se taskbar správně pároval s ikonou
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(u"ultronstudio.mhdk.record")
+            except Exception:
+                pass
+
         self.title(APP_TITLE)
         self.resizable(False, False)
+        # nastavit ikonu okna (logo.png v kořeni projektu)
+        try:
+            icon_path = os.path.join(BASE_DIR, "logo.png")
+            if os.path.exists(icon_path):
+                img = tk.PhotoImage(file=icon_path)
+                self.iconphoto(False, img)
+                self._icon_image = img
+        except Exception:
+            pass
 
         # Stav
         self.category_var = tk.StringVar(value="sys")

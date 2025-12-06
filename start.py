@@ -5,11 +5,14 @@ import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LINES_DIR = os.path.join(BASE_DIR, "lines")
 
 APP_TITLE = "MHD HK – Bus Simulator"
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 APP_AUTHOR = "Petr Vurm"
 
 def load_lines():
@@ -54,7 +57,25 @@ def run_simulator(line_id: str, direction: str):
 class StartWindow(tk.Tk):
     def __init__(self):
         super().__init__()
+        # na Windows nastavíme AppUserModelID, aby se taskbar správně pároval s ikonou
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(u"ultronstudio.mhdk.start")
+            except Exception:
+                pass
+
         self.title(APP_TITLE)
+        # nastavit ikonu okna (logo.png v kořeni projektu)
+        try:
+            icon_path = os.path.join(BASE_DIR, "logo.png")
+            if os.path.exists(icon_path):
+                img = tk.PhotoImage(file=icon_path)
+                # iconphoto očekává objekt PhotoImage a referenci musíme uchovat
+                self.iconphoto(False, img)
+                self._icon_image = img
+        except Exception:
+            pass
         self.resizable(False, False)
 
         self.lines = load_lines()
@@ -117,13 +138,13 @@ class StartWindow(tk.Tk):
         line = self.lines[idx]
         direction = self.direction_var.get()
 
-        # schovej okno startéru a spusť simulátor blokujícím způsobem
+        # schovej okno startéru a spusť simulátor přímo v procesu (import main)
         self.withdraw()
-        python_exe = sys.executable or "python"
-        cmd = [python_exe, os.path.join(BASE_DIR, "main.py"), line["id"], direction]
-
         try:
-            subprocess.run(cmd, cwd=BASE_DIR)
+            # import zde, aby modul importoval až při startu (rychlejší start okna)
+            import main as main_mod
+            sim = main_mod.BusSimulatorSimpleLine(line_id=line["id"], direction=direction)
+            sim.run()
         except Exception as e:
             messagebox.showerror("Chyba", f"Simulátor se nepodařilo spustit:\n{e}")
         finally:

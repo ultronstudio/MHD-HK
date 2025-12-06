@@ -43,8 +43,13 @@ TROLLEY_REPAIR_MIN_SEC = 20.0
 TROLLEY_REPAIR_MAX_SEC = 60.0
 TROLLEY_BREAK_REASONS = ["porucha_trolej", "strom_na_vedeni", "nehoda_automobil", "porucha_vozu"]
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    # běží zabalené PyInstaller --onefile
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LINES_DIR = os.path.join(BASE_DIR, "lines")
+ICON_PATH = os.path.join(BASE_DIR, "logo.png")
 
 
 def load_line_definition(line_id: str):
@@ -63,7 +68,32 @@ def load_line_definition(line_id: str):
 class BusSimulatorSimpleLine:
     def __init__(self, line_id: str = "2", direction: str = "tam"):
         print("--- INICIALIZACE SIMULÁTORU ---")
+        # na Windows nastavíme AppUserModelID, aby se taskbar správně pároval s ikonou
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(u"ultronstudio.mhdhk")
+            except Exception:
+                pass
+
         pygame.init()
+        # načíst ikonu (logo.png) a nastavit ji pro Pygame okno
+        try:
+            if os.path.exists(ICON_PATH):
+                icon_surf = pygame.image.load(ICON_PATH)
+                try:
+                    icon_surf = icon_surf.convert_alpha()
+                except Exception:
+                    try:
+                        icon_surf = icon_surf.convert()
+                    except Exception:
+                        pass
+                try:
+                    pygame.display.set_icon(icon_surf)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         try: 
             pygame.mixer.init()
             pygame.mixer.set_num_channels(8)
@@ -125,6 +155,9 @@ class BusSimulatorSimpleLine:
 
         pygame.display.set_caption(caption)
 
+        # připravit cestu k ikonce pro případné Tk root dialogy
+        self._icon_path = ICON_PATH if os.path.exists(ICON_PATH) else None
+
         self.prebuild_route()
 
         # plánovaný čas odjezdu z první zastávky (aktuální čas)
@@ -152,6 +185,18 @@ class BusSimulatorSimpleLine:
         self.timer = 0.0
         # Ihned po startu přejdi do DOORS_OPEN (otevření se zvukem)
         self.current_wait_limit = 0.0
+        # Časy čekání při zastávce (v sekundách)
+        # Po zastavení chvíli počkat, pak otevřít dveře
+        self.stop_wait_before_open = 1.5
+        # Po otevření dveří počkat navíc (audio_len + this)
+        self.after_open_extra = 1.0
+        # Minimální doba, po kterou budou dveře otevřené (v sekundách)
+        # Nastaveno na 15s, aby byl nástup/výstup dostatečně dlouhý na všech zastávkách
+        self.door_open_min = 15.0
+        # Doba otevření na první zastávce po startu (v sekundách)
+        self.first_stop_dwell = 15.0
+        # Po zavření dveří čekat ještě krátce před odjezdem
+        self.after_close_extra = 1.0
         self.debug_timer = 0.0 
         
         # Audio fronta
@@ -401,7 +446,8 @@ class BusSimulatorSimpleLine:
                 self.bus_abs_pos = target_time
                 self.state = "STOPPED"
                 self.timer = 0
-                self.current_wait_limit = 1.0
+                # krátké čekání na úplné zastavení před otevřením dveří
+                self.current_wait_limit = getattr(self, 'stop_wait_before_open', 1.5)
 
         # --- STANDARDNÍ STAVY ZASTÁVKY ---
         elif self.state == "BRAKING":
@@ -412,7 +458,8 @@ class BusSimulatorSimpleLine:
                 self.bus_abs_pos = target_time
                 self.state = "STOPPED"
                 self.timer = 0
-                self.current_wait_limit = 1.0
+                # krátké čekání na úplné zastavení před otevřením dveří
+                self.current_wait_limit = getattr(self, 'stop_wait_before_open', 1.5)
 
         elif self.state == "BROKEN":
             # Vozidlo je v poruše: čekáme na dokončení opravy (repair_timer nastavován při přechodu do BROKEN)
@@ -430,11 +477,22 @@ class BusSimulatorSimpleLine:
         elif self.state == "STOPPED":
             self.timer += dt
             if self.timer > self.current_wait_limit:
+                # otevřít dveře po čekání na zastavení
                 self.state = "DOORS_OPEN"
                 self.timer = 0
-                # otevření dveří se zvukem, čas stejně jako zavření
                 audio_len = self.play_sound('sys', 'bus_door')
-                self.current_wait_limit = audio_len + 2.0
+                # zajisti minimalni dobu otevreni pro nastup
+                wait_time = audio_len + getattr(self, 'after_open_extra', 1.0)
+                min_open = getattr(self, 'door_open_min', 4.0)
+                # pokud jsme na PRVNÍ zastávce po startu, necháme delší otevření
+                if getattr(self, 'stop_index', 0) == 0 and not getattr(self, 'startup_sequence_done', False):
+                    min_open = max(min_open, getattr(self, 'first_stop_dwell', 15.0))
+                    # označíme, že úvodní sekvence proběhla
+                    try:
+                        self.startup_sequence_done = True
+                    except Exception:
+                        pass
+                self.current_wait_limit = max(wait_time, min_open)
 
         elif self.state == "DOORS_OPEN":
             self.timer += dt
@@ -442,8 +500,9 @@ class BusSimulatorSimpleLine:
                 # běžné chování: zavřít dveře a připravit čas na zavření
                 self.state = "DOORS_CLOSED"
                 self.timer = 0
+                # spustit zvuk zavírání/pípnutí a čekat než dveře budou zavřené
                 audio_len = self.play_sound('sys', 'buzzer')
-                self.current_wait_limit = audio_len + 2.0
+                self.current_wait_limit = audio_len + getattr(self, 'after_close_extra', 0.5)
 
         elif self.state == "DOORS_CLOSED":
             self.timer += dt
@@ -633,6 +692,14 @@ class BusSimulatorSimpleLine:
                     # potvrzení ukončení simulace
                     if root is None:
                         root = tk.Tk()
+                        # pokud máme logo, nastav ho jako ikonu okna dialogu
+                        try:
+                            if self._icon_path and os.path.exists(self._icon_path):
+                                img = tk.PhotoImage(master=root, file=self._icon_path)
+                                root.iconphoto(False, img)
+                                root._icon_image = img
+                        except Exception:
+                            pass
                         root.withdraw()
                     if messagebox.askyesno("Ukončit simulaci", "Opravdu chcete ukončit simulaci linky?"):
                         running = False
