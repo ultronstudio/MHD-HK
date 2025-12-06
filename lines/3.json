@@ -3,7 +3,7 @@
   "description": "PLAČICE > SLEZSKÉ PŘEDMĚSTÍ - CIHELNA",
   "stops": [
     { "name": "PLAČICE", "distance": 0, "audio": "placice" },
-    { "name": "Vlčkovická", "distance": 2, "audio": "xvickovicka" },
+    { "name": "Vlčkovická", "distance": 2, "audio": "vlckovicka" },
     { "name": "KUKLENY ALBERT", "distance": 4, "audio": "kukleny_albert" },
     { "name": "Bláhovka", "distance": 6, "audio": "blahovka" },
     { "name": "KUKLENY náměstí", "distance": 7, "audio": "kukleny_namesti" },

@@ -17,3 +17,6 @@ Thumbs.db
 # audio soubory
 # audio/sys/
 # audio/stops/
+
+# logy
+*.log
