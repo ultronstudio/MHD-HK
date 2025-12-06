@@ -1,6 +1,6 @@
 {
   "id": "2",
-  "description": "Terminál HD > Nový Hradec Králové",
+  "description": "TERMINÁL HD > NOVÝ HRADEC KRÁLOVÉ",
   "stops": [
     { "name": "TERMINÁL HD", "distance": 0, "audio": "terminal_hd" },
     { "name": "HLAVNÍ NÁDRAŽÍ", "distance": 1, "audio": "hlavni_nadrazi" },

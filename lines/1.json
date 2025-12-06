@@ -1,6 +1,6 @@
 {
   "id": "1",
-  "description": "Terminál HD > Kluky (planetárium)",
+  "description": "TERMINÁL HD > KLUKY (PLANETÁRIUM)",
   "stops": [
     { "name": "TERMINÁL HD", "distance": 0, "audio": "terminal_hd" },
     { "name": "HLAVNÍ NÁDRAŽÍ", "distance": 1, "audio": "hlavni_nadrazi" },

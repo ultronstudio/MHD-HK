@@ -61,20 +61,26 @@ class StartWindow(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self._build_ui()
+        # nastav výchozí text směrů dle vybrané linky
+        self.update_direction_labels()
 
     def _build_ui(self):
-        main = ttk.Frame(self, padding=15)
+        # trochu větší okno, aby se vešel celý text linek
+        main = ttk.Frame(self, padding=(20, 15, 20, 15))
         main.grid(row=0, column=0, sticky="nsew")
 
         # Výběr linky
         ttk.Label(main, text="Linka:").grid(row=0, column=0, sticky="w")
 
         self.line_var = tk.StringVar()
-        line_names = [f"{l['id']} | {l['description']}" for l in self.lines] or ["Žádné linky nenalezeny"]
-        self.line_combo = ttk.Combobox(main, textvariable=self.line_var, values=line_names, state="readonly", width=35)
+        line_names = [f" {l['id']} | {l['description']}" for l in self.lines] or ["Žádné linky nenalezeny"]
+        # širší combobox, aby byl vidět celý text položky
+        self.line_combo = ttk.Combobox(main, textvariable=self.line_var, values=line_names, state="readonly", width=55)
         if self.lines:
             self.line_combo.current(0)
         self.line_combo.grid(row=0, column=1, padx=(5, 0), sticky="w")
+        # při změně výběru linky aktualizuj text směrů
+        self.line_combo.bind("<<ComboboxSelected>>", lambda e: self.update_direction_labels())
 
         # Směr
         ttk.Label(main, text="Směr:").grid(row=1, column=0, pady=(10, 0), sticky="w")
@@ -83,8 +89,10 @@ class StartWindow(tk.Tk):
         dir_frame = ttk.Frame(main)
         dir_frame.grid(row=1, column=1, padx=(5, 0), pady=(10, 0), sticky="w")
 
-        ttk.Radiobutton(dir_frame, text="Směr TAM (Nový Hradec Králové)", variable=self.direction_var, value="tam").grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(dir_frame, text="Směr ZPĚT (Terminál HD)", variable=self.direction_var, value="zpet").grid(row=1, column=0, sticky="w")
+        self.rb_tam = ttk.Radiobutton(dir_frame, text="Směr TAM", variable=self.direction_var, value="tam")
+        self.rb_tam.grid(row=0, column=0, sticky="w")
+        self.rb_zpet = ttk.Radiobutton(dir_frame, text="Směr ZPĚT", variable=self.direction_var, value="zpet")
+        self.rb_zpet.grid(row=1, column=0, sticky="w")
 
         # Tlačítka
         btn_frame = ttk.Frame(main)
@@ -121,6 +129,28 @@ class StartWindow(tk.Tk):
         finally:
             # po ukončení simulátoru znovu ukaž start okno
             self.deiconify()
+
+    def update_direction_labels(self):
+        """Aktualizuje text radiobuttonů Směr TAM/ZPĚT podle vybrané linky.
+        Očekává popis ve formátu "A > B" v JSON "description".
+        Pokud formát není k dispozici, ponechá obecné popisky.
+        """
+        if not self.lines:
+            return
+        idx = self.line_combo.current()
+        if idx < 0 or idx >= len(self.lines):
+            return
+        desc = self.lines[idx].get("description", "")
+        # pokus o rozdělení na A (výchozí) a B (cílová)
+        parts = [p.strip() for p in desc.split('>')]
+        if len(parts) == 2:
+            start_name, end_name = parts
+            self.rb_tam.config(text=f"Směr TAM ({end_name})")
+            self.rb_zpet.config(text=f"Směr ZPĚT ({start_name})")
+        else:
+            # fallback – bez detailu
+            self.rb_tam.config(text="Směr TAM")
+            self.rb_zpet.config(text="Směr ZPĚT")
 
     def show_about(self):
         text = (

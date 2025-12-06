@@ -29,7 +29,7 @@ STOPS_AUDIO_DIR = os.path.join(AUDIO_DIR, "stops")
 
 DOOR_TIME = 8.0           # doba otevřených dveří (s)
 LAYOVER_TIME = 10.0       # pauza na konečné (s)
-TIME_SCALE = 8.0          # 1 reálná sekunda = 8 s simulovaného času
+TIME_SCALE = 4.0          # 1 reálná sekunda = 4 s simulovaného času
 
 # jak dlouho před příjezdem se má hlásit
 NEXT_STOP_ANNOUNCE_BEFORE_SEC = 60.0    # "příští zastávka"
@@ -111,8 +111,11 @@ class BusSimulatorSimpleLine:
         self.gui_stop_index = 0 
         
         # Stavy: DRIVING, BRAKING, STOPPED, DOORS_OPEN, DOORS_CLOSED, LAYOVER
+        # Výchozí: zastávka s dveřmi zavřenými, ihned přejdeme na otevření dveří se zvukem
+        # aby byl slyšet startovní nástup.
         self.state = "STOPPED" 
         self.timer = 0.0
+        # Ihned po startu přejdi do DOORS_OPEN (otevření se zvukem)
         self.current_wait_limit = 0.0
         self.debug_timer = 0.0 
         
@@ -125,6 +128,8 @@ class BusSimulatorSimpleLine:
         self.next_stop_announced = False 
         self.current_stop_announced = False 
         self.leg_start_pos = 0.0
+        # Úvodní sekvence na první zastávce: zavřeno -> otevřít (se zvukem) -> zavřít (se zvukem) -> rozjezd
+        self.startup_sequence_done = False
 
     def prebuild_route(self):
         self.stops = []
@@ -232,7 +237,9 @@ class BusSimulatorSimpleLine:
             if self.timer > self.current_wait_limit:
                 self.state = "DOORS_OPEN"
                 self.timer = 0
-                self.current_wait_limit = DOOR_TIME 
+                # otevření dveří se zvukem, čas stejně jako zavření
+                audio_len = self.play_sound('sys', 'bus_door')
+                self.current_wait_limit = audio_len + 2.0
 
         elif self.state == "DOORS_OPEN":
             self.timer += dt
@@ -245,9 +252,14 @@ class BusSimulatorSimpleLine:
         elif self.state == "DOORS_CLOSED":
             self.timer += dt
             if self.timer > self.current_wait_limit:
+                # Pokud jsme na úplném začátku, už proběhne otevření ve STOPPED -> DOORS_OPEN,
+                # takže tady není třeba sekvenci nutit.
+                # po zavření dveří se buď rozjíždíme, nebo jdeme na režim konečné
                 if self.stop_index == len(self.stops) - 1: 
+                    # konečná: nejprve výstup (dveře otevřít + zavřít), pak přesun na nultou zastávku
                     self.state = "LAYOVER"
                 else:
+                    # dveře zavřené -> rozjezd
                     self.stop_index += 1
                     self.state = "DRIVING"
                     self.next_stop_announced = False
@@ -256,13 +268,38 @@ class BusSimulatorSimpleLine:
                 self.timer = 0
 
         elif self.state == "LAYOVER":
+            # konečná: simulace výstupu/nástupu
             self.timer += dt
-            if self.timer > LAYOVER_TIME:
-                self.smer_tam = not self.smer_tam
-                self.prebuild_route()
-                self.bus_abs_pos = 0.0
-                self.stop_index = 1
-                self.gui_stop_index = 0 
+            # fáze 1: otevřít dveře a vyložit cestující
+            if self.timer == 0:
+                pass
+            if self.timer > 0 and self.timer < LAYOVER_TIME/3:
+                # první třetina: otevření dveří + čekání
+                # přehraj pouze jednou na začátku této fáze
+                # využij menší trik: nastav current_wait_limit na DOOR_TIME
+                if abs(self.timer - 0) < 0.02:
+                    self.play_sound('sys', 'bus_door')
+            # fáze 2: zavření dveří po výstupu
+            if self.timer >= LAYOVER_TIME/3 and self.timer < 2*LAYOVER_TIME/3:
+                if abs(self.timer - LAYOVER_TIME/3) < 0.02:
+                    self.play_sound('sys', 'buzzer')
+            # fáze 3: přestavení na výchozí zastávku, otevření, nástup, zavření
+            if self.timer >= 2*LAYOVER_TIME/3 and self.timer < LAYOVER_TIME:
+                # během této fáze provedeme přepnutí směru
+                # a přípravu nové trasy
+                if abs(self.timer - 2*LAYOVER_TIME/3) < 0.02:
+                    self.smer_tam = not self.smer_tam
+                    self.prebuild_route()
+                    self.bus_abs_pos = 0.0
+                    self.stop_index = 0
+                    self.gui_stop_index = 0
+                    # otevření dveří na nástup
+                    self.play_sound('sys', 'bus_door')
+                # krátce před koncem pauzy zavři dveře
+                if self.timer > LAYOVER_TIME - 2.0:
+                    self.play_sound('sys', 'buzzer')
+            # konec pauzy -> jedeme od nulté
+            if self.timer >= LAYOVER_TIME:
                 self.state = "DRIVING"
                 self.timer = 0
                 self.next_stop_announced = False
